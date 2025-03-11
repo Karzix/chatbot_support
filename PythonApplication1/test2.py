@@ -1,10 +1,13 @@
-﻿import unicodedata
+﻿import google.generativeai as genai
 
-def normalize_text(text):
-    return unicodedata.normalize("NFC", text).lower()
+# Thiết lập API Key
+genai.configure(api_key="AIzaSyC7aoODhVimXdVvsKgKlS6Oe3qZwMEV41k")
 
-title = normalize_text("Đăng nhập hệ thống")
-query = normalize_text("đăng nhập hệ thống")
+# Chọn mô hình Gemini Pro (miễn phí)
+model = genai.GenerativeModel("gemini-2.0-flash")
 
-print([ord(c) for c in title])
-print([ord(c) for c in query])
+# Gửi câu hỏi
+response = model.generate_content("Giới thiệu về trí tuệ nhân tạo.")
+
+# In kết quả
+print(response.text)

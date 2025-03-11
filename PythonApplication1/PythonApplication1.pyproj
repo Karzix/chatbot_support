@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>f015caa9-79dc-4826-93d2-4993a50e5dc3</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>test2.py</StartupFile>
+    <StartupFile>search_in_elasticsearch.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>

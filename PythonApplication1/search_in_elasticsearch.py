@@ -1,19 +1,26 @@
 ﻿from docx import Document
 import re
 import torch
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer, pipeline
 from elasticsearch import Elasticsearch
 import numpy as np
 import unicodedata
-
+import google.generativeai as genai
 
 # Kết nối Elasticsearch
 es = Elasticsearch("http://localhost:9200")
-INDEX_NAME = "hdsd"  # Đổi thành index của bạn
+INDEX_NAME = "hdsd"  
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_name = "VoVanPhuc/sup-SimCSE-VietNamese-phobert-base"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name).to(device)
+
+genai.configure(api_key="AIzaSyC7aoODhVimXdVvsKgKlS6Oe3qZwMEV41k")
+
+# Chọn mô hình Gemini Pro (miễn phí)
+modelGMN = genai.GenerativeModel("gemini-2.0-flash")
+
+
 
 def text_to_vector(text):
     inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True).to(device)
@@ -21,12 +28,9 @@ def text_to_vector(text):
         outputs = model(**inputs)
     vector = outputs.last_hidden_state[:, 0, :].cpu().numpy().tolist()[0]  # vector gốc (768 chiều)
     
-    # Giảm về 256 chiều bằng cách lấy trung bình nhóm (hoặc PCA)
-    # vector = np.array(vector).reshape(256, 3).mean(axis=1).tolist()
-    
     return vector
 
-def search_in_elasticsearch(query, index_name, top_k=5):
+def search_in_elasticsearch(query, index_name, top_k=1):
     # Chuyển câu hỏi thành vector
     query_vector = text_to_vector(query)
 
@@ -59,19 +63,28 @@ def search_in_elasticsearch(query, index_name, top_k=5):
 
 def normalize_text(text):
     return unicodedata.normalize("NFC", text).lower()
-query = "làm thế nào để đăng nhập vào hệ thống"
+query = "làm thế nào để tiếp nhận ngoại trú"
 query = normalize_text(query)
 index_name = "_all"
+
+
+def refine_answer(answer):
+    response = modelGMN.generate_content("Câu hỏi của người dùng: " + query + " - Đáp án mẫu: " + answer 
+    + "\nHãy chuyển đáp án mẫu lại sao cho tự nhiên hơn")
+    print(response.text)
+    return response
+
+
 
 if es.ping():
     print("🔹 Elasticsearch đã kết nối thành công!")
     results = search_in_elasticsearch(query, index_name)
     
-    # In kết quả
+    # In kết quả sau khi đã cải thiện câu trả lời bằng Llama
     for i, result in enumerate(results, 1):
-        print(f"\n🔹 Kết quả {i}:")
-        print(f"📌 Title: {result['title']}")
-        print(f"📝 Answer: {result['answer']}")
-        print(f"⭐ Score: {result['score']}")
+        print(f"\n🔹 Cur {result['answer']}:")
+        improved_answer = refine_answer(result['answer'])
+        # print(f"🔹 Improved {improved_answer.text}")
+        
 else:
     print("⚠️ Không thể kết nối Elasticsearch!")

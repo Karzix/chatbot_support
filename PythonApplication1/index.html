@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HIS Service Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        .chat-container {
+            width: 400px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .chat-header {
+            background: #673AB7;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .chat-box {
+            height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        .message {
+            display: flex;
+            margin-bottom: 10px;
+            max-width: 80%;
+        }
+        .bot-message {
+            background: #E3F2FD;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .user-message {
+            background: #DCF8C6;
+            padding: 10px;
+            border-radius: 10px;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        .chat-input {
+            display: flex;
+            border-top: 1px solid #ccc;
+            padding: 10px;
+            background: white;
+        }
+        input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            outline: none;
+        }
+        button {
+            background: #673AB7;
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">HIS Service Chatbot</div>
+        <div class="chat-box" id="chatBox">
+            <div class="message bot-message">Xin chào! Tôi là Chatbot hỗ trợ dịch vụ HIS, được thiết kế để giúp bạn giải đáp các câu hỏi. Tôi có thể giúp gì cho bạn hôm nay?</div>
+        </div>
+        <div class="chat-input">
+            <input type="text" id="userInput" placeholder="Start typing a message...">
+            <button onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <script>
+        async function sendMessage() {
+            const userInput = document.getElementById("userInput");
+            const chatBox = document.getElementById("chatBox");
+            let message = userInput.value.trim();
+            if (!message) return;
+
+            // Hiển thị tin nhắn người dùng
+            let userMsg = document.createElement("div");
+            userMsg.className = "message user-message";
+            userMsg.textContent = message;
+            chatBox.appendChild(userMsg);
+            userInput.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Gọi API chatbot
+            try {
+                let response = await fetch("http://127.0.0.1:5000/search", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: message })
+                });
+                let data = await response.json();
+
+                // Hiển thị phản hồi chatbot
+                let botMsg = document.createElement("div");
+                botMsg.className = "message bot-message";
+                botMsg.textContent = data.refined_answer || "Xin lỗi, tôi không hiểu câu hỏi của bạn.";
+                chatBox.appendChild(botMsg);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            } catch (error) {
+                console.error("Lỗi gọi API:", error);
+            }
+        }
+    </script>
+</body>
+</html>

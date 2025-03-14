@@ -1,45 +1,41 @@
-﻿from docx import Document
-import re
-import torch
-from transformers import AutoModel, AutoTokenizer, pipeline
+﻿from flask import Flask, request, jsonify
 from elasticsearch import Elasticsearch
-import numpy as np
-import unicodedata
+import torch
+from transformers import AutoModel, AutoTokenizer
 import google.generativeai as genai
+import unicodedata
+from flask_cors import CORS
 
+# Khởi tạo Flask
+app = Flask(__name__)
+CORS(app)
 # Kết nối Elasticsearch
 es = Elasticsearch("http://localhost:9200")
 INDEX_NAME = "hdsd"  
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_name = "VoVanPhuc/sup-SimCSE-VietNamese-phobert-base"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name).to(device)
 
+
 genai.configure(api_key="AIzaSyC7aoODhVimXdVvsKgKlS6Oe3qZwMEV41k")
-
-# Chọn mô hình Gemini Pro (miễn phí)
 modelGMN = genai.GenerativeModel("gemini-2.0-flash")
-
-
 
 def text_to_vector(text):
     inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True).to(device)
     with torch.no_grad():
         outputs = model(**inputs)
     vector = outputs.last_hidden_state[:, 0, :].cpu().numpy().tolist()[0]  # vector gốc (768 chiều)
-    
     return vector
 
 def search_in_elasticsearch(query, index_name, top_k=1):
-    # Chuyển câu hỏi thành vector
     query_vector = text_to_vector(query)
-
-    # Truy vấn Elasticsearch
     search_query = {
         "size": top_k,
         "query": {
             "script_score": {
-                "query": {"match_all": {}},  # Lấy tất cả, sau đó tính điểm dựa trên vector
+                "query": {"match_all": {}},
                 "script": {
                     "source": "cosineSimilarity(params.query_vector, 'title_vector') + 1.0",
                     "params": {"query_vector": query_vector}
@@ -47,44 +43,45 @@ def search_in_elasticsearch(query, index_name, top_k=1):
             }
         }
     }
-
     response = es.search(index=index_name, body=search_query)
-
-    # Lấy danh sách kết quả
-    results = []
-    for hit in response["hits"]["hits"]:
-        results.append({
+    results = [
+        {
             "title": hit["_source"]["title"],
             "answer": hit["_source"]["answer"],
             "score": hit["_score"]
-        })
-
+        }
+        for hit in response["hits"]["hits"]
+    ]
     return results
 
-def normalize_text(text):
-    return unicodedata.normalize("NFC", text).lower()
-query = "làm thế nào để tiếp nhận ngoại trú"
-query = normalize_text(query)
-index_name = "_all"
+def refine_answer(query, answer):
+    response = modelGMN.generate_content(f"Câu hỏi của người dùng: {query} - Đáp án mẫu: {answer}\nHãy chuyển đáp án mẫu lại sao cho tự nhiên hơn")
+    return response.text
 
+@app.route('/search', methods=['POST'])
+def search():
+    data = request.json
+    query = data.get("query", "")
+    query = unicodedata.normalize("NFC", query).lower()
+    if not query:
+        return jsonify({"error": "Query không được để trống."}), 400
 
-def refine_answer(answer):
-    response = modelGMN.generate_content("Câu hỏi của người dùng: " + query + " - Đáp án mẫu: " + answer 
-    + "\nHãy chuyển đáp án mẫu lại sao cho tự nhiên hơn")
-    print(response.text)
-    return response
-
-
-
-if es.ping():
-    print("🔹 Elasticsearch đã kết nối thành công!")
-    results = search_in_elasticsearch(query, index_name)
+    if not es.ping():
+        return jsonify({"error": "Không thể kết nối Elasticsearch!"}), 500
     
-    # In kết quả sau khi đã cải thiện câu trả lời bằng Llama
-    for i, result in enumerate(results, 1):
-        print(f"\n🔹 Cur {result['answer']}:")
-        improved_answer = refine_answer(result['answer'])
-        # print(f"🔹 Improved {improved_answer.text}")
-        
-else:
-    print("⚠️ Không thể kết nối Elasticsearch!")
+    results = search_in_elasticsearch(query, INDEX_NAME)
+    
+    if not results:
+        return jsonify({"message": "Không tìm thấy kết quả phù hợp."})
+    
+    best_result = results[0]  # Lấy kết quả tốt nhất
+    improved_answer = refine_answer(query, best_result['answer'])
+    
+    return jsonify({
+        "query": query,
+        "original_answer": best_result['answer'],
+        "refined_answer": improved_answer
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

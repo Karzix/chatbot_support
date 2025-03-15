@@ -1,4 +1,5 @@
 const api = "http://127.0.0.1:5000/";
+document.getElementById("submit").addEventListener("click", uploadFile);
 async function uploadFile() {
   const fileInput = document.getElementById("fileInput");
   if (!fileInput.files.length) {

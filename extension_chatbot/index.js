@@ -1,4 +1,5 @@
 const api = "http://127.0.0.1:5000/";
+document.getElementById("submit").addEventListener("click", sendMessage);
 async function sendMessage() {
     const userInput = document.getElementById("userInput");
     const chatBox = document.getElementById("chatBox");

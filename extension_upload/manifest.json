@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "Chatbot Extension",
+    "name": "Chatbot HIS upload",
     "version": "1.0",
     "description": "Extension gọi API chatbot và hiển thị câu trả lời.",
     "permissions": ["storage"],

@@ -1,7 +1,7 @@
-# Chatbot Hỗ Trợ Hướng Dẫn Sử Dụng Phần Mềm
+# Chatbot Hỗ Trợ Hướng Dẫn Sử Dụng Phần Mềm Quản Lý Bệnh Viện
 
 ## Giới thiệu
-Dự án này triển khai một chatbot sử dụng Python, Flask và Elasticsearch để hỗ trợ nhân viên sử dụng phần mềm. Chatbot có thể đọc nội dung từ file DOCX, trả lời câu hỏi dựa trên nội dung đó và cập nhật dữ liệu khi bổ sung file mới.
+Dự án này triển khai một chatbot sử dụng Python, Flask và Elasticsearch để hỗ trợ nhân viên sử dụng phần mềm y tế. Chatbot có thể đọc nội dung từ file DOCX, trả lời câu hỏi dựa trên nội dung đó và cập nhật dữ liệu khi bổ sung file mới.
 
 ## Yêu cầu hệ thống
 - **Docker** (Để chạy Elasticsearch)
@@ -87,6 +87,38 @@ Trong file mã nguồn, bạn có thể thay đổi API key cho Gemini AI bằng
 genai.configure(api_key="YOUR_API_KEY_HERE")
 ```
 > **Lưu ý:** Hãy thay thế `YOUR_API_KEY_HERE` bằng API key của bạn.
+
+---
+
+## Build Extension Chrome
+
+### Chạy API
+Trước khi build extension, cần chạy API. Dockerfile nằm tại:
+```sh
+chatbot_support/PythonApplication1/Dockerfile
+```
+
+### Đổi API URL
+Dự án có 2 folder:
+- `extension_chatbot`
+- `extension_upload`
+
+Truy cập vào `index.js` và chỉnh sửa dòng sau:
+```js
+const api = "http://127.0.0.1:5000/"; 
+// Đổi thành API URL của bạn:
+const api = "{your api url}";
+```
+
+### Tạo Extension
+1. Mở trình duyệt Chrome và truy cập:
+   ```sh
+   chrome://extensions/
+   ```
+2. Bật chế độ "Nhà phát triển" (góc trên bên phải màn hình).
+3. Chọn **"Tải tiện ích đã giải nén"**.
+4. Chọn một trong các thư mục extension, ví dụ: `extension_chatbot`.
+5. Sau khi tải lên thành công, bạn sẽ thấy extension mới trong danh sách và có thể sử dụng.
 
 ---
 

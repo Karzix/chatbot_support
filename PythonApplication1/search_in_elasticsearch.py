@@ -1,87 +1,85 @@
-﻿from flask import Flask, request, jsonify
-from elasticsearch import Elasticsearch
+﻿from elasticsearch import Elasticsearch
 import torch
 from transformers import AutoModel, AutoTokenizer
 import google.generativeai as genai
-import unicodedata
-from flask_cors import CORS
+import numpy as np
 
-# Khởi tạo Flask
-app = Flask(__name__)
-CORS(app)
+# Cấu hình Gemini AI
+genai.configure(api_key="AIzaSyC7aoODhVimXdVvsKgKlS6Oe3qZwMEV41k")
+modelGMN = genai.GenerativeModel("gemini-2.0-flash")
+
 # Kết nối Elasticsearch
-es = Elasticsearch("http://localhost:9200")
-INDEX_NAME = "hdsd"  
+es = Elasticsearch("http://localhost:9200/")
 
+# Cấu hình model nhúng văn bản
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_name = "VoVanPhuc/sup-SimCSE-VietNamese-phobert-base"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name).to(device)
 
-
-genai.configure(api_key="AIzaSyC7aoODhVimXdVvsKgKlS6Oe3qZwMEV41k")
-modelGMN = genai.GenerativeModel("gemini-2.0-flash")
-
 def text_to_vector(text):
     inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True).to(device)
     with torch.no_grad():
         outputs = model(**inputs)
-    vector = outputs.last_hidden_state[:, 0, :].cpu().numpy().tolist()[0]  # vector gốc (768 chiều)
-    return vector
+    return outputs.last_hidden_state[:, 0, :].cpu().numpy().tolist()[0]  # Vector 768 chiều
 
-def search_in_elasticsearch(query, index_name, top_k=1):
-    query_vector = text_to_vector(query)
-    search_query = {
-        "size": top_k,
-        "query": {
-            "script_score": {
-                "query": {"match_all": {}},
-                "script": {
-                    "source": "cosineSimilarity(params.query_vector, 'title_vector') + 1.0",
-                    "params": {"query_vector": query_vector}
-                }
+# Câu hỏi đầu vào
+query = "làm thế nào để tạo một phếu nhập viện"
+
+# Chuyển query thành vector
+query_vector = text_to_vector(query)
+
+# Truy vấn Elasticsearch lấy 5 kết quả tốt nhất
+search_query = {
+    "size": 5,
+    "query": {
+        "script_score": {
+            "query": {"match_all": {}},
+            "script": {
+                "source": "cosineSimilarity(params.query_vector, 'title_vector') + 1.0",
+                "params": {"query_vector": query_vector}
             }
         }
     }
-    response = es.search(index=index_name, body=search_query)
-    results = [
-        {
-            "title": hit["_source"]["title"],
-            "answer": hit["_source"]["answer"],
-            "score": hit["_score"]
-        }
-        for hit in response["hits"]["hits"]
-    ]
-    return results
+}
 
-def refine_answer(query, answer):
-    response = modelGMN.generate_content(f"Câu hỏi của người dùng: {query} - Đáp án mẫu: {answer}\nHãy chuyển đáp án mẫu lại sao cho tự nhiên hơn")
-    return response.text
+# Gửi truy vấn và nhận kết quả
+response = es.search(index="hdsd", body=search_query)
+results = response["hits"]["hits"]
 
-@app.route('/search', methods=['POST'])
-def search():
-    data = request.json
-    query = data.get("query", "")
-    query = unicodedata.normalize("NFC", query).lower()
-    if not query:
-        return jsonify({"error": "Query không được để trống."}), 400
+# In kết quả tìm được
+print("\n🔍 Kết quả tìm kiếm cho:", query)
+for i, hit in enumerate(results, 1):
+    print(f"\n🔹 Kết quả {i}:")
+    print(f"   - Tiêu đề: {hit['_source']['title']}")
+    print(f"   - Trả lời: {hit['_source']['answer']}")
+    print(f"   - Điểm số: {hit['_score']:.4f}")
 
-    if not es.ping():
-        return jsonify({"error": "Không thể kết nối Elasticsearch!"}), 500
-    
-    results = search_in_elasticsearch(query, INDEX_NAME)
-    
-    if not results:
-        return jsonify({"message": "Không tìm thấy kết quả phù hợp."})
-    
-    best_result = results[0]  # Lấy kết quả tốt nhất
-    improved_answer = refine_answer(query, best_result['answer'])
-    
-    return jsonify({
-        "query": query,
-        "original_answer": best_result['answer'],
-        "refined_answer": improved_answer
-    })
+# Nếu không có đủ kết quả, dừng lại
+if not results:
+    print("\n⚠️ Không có kết quả phù hợp!")
+else:
+    # Tạo danh sách câu trả lời từ Elasticsearch
+    answers = []
+    for idx, result in enumerate(results):
+        answers.append(f"{idx}️⃣ Đáp án {idx}: \"{result['_source']['answer']}\"")
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Ghép tất cả các câu trả lời thành 1 chuỗi
+    answers_text = "\n".join(answers)
+
+    # Gửi yêu cầu đến Gemini AI
+    prompt = f"""
+    Tôi có một câu hỏi: "{query}".
+    Dưới đây là các câu trả lời từ hệ thống:
+    {answers_text}
+
+    Hãy phân tích và chọn câu trả lời nào đúng nhất cho câu hỏi trên. 
+    Nếu tất cả đều không phù hợp, hãy trả về "False".
+    Nếu một câu phù hợp, hãy trả về số thứ tự (0, 1, 2, ...) của câu trả lời đó.
+    Chỉ trả về số thứ tự hoặc "False", không có bất kỳ từ ngữ nào khác.
+    """
+
+    response = modelGMN.generate_content(prompt)
+    gemini_result = response.text.strip()
+
+    print("\n🔹 Kết quả từ Gemini AI:", gemini_result)

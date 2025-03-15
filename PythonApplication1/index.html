@@ -99,6 +99,13 @@
             userInput.value = "";
             chatBox.scrollTop = chatBox.scrollHeight;
 
+            // Hiển thị trạng thái "Đang trả lời..."
+            let botMsg = document.createElement("div");
+            botMsg.className = "message bot-message";
+            botMsg.innerHTML = "<i>Đang trả lời...</i>";
+            chatBox.appendChild(botMsg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
             // Gọi API chatbot
             try {
                 let response = await fetch("http://127.0.0.1:5000/search", {
@@ -108,16 +115,15 @@
                 });
                 let data = await response.json();
 
-                // Hiển thị phản hồi chatbot
-                let botMsg = document.createElement("div");
-                botMsg.className = "message bot-message";
-                botMsg.textContent = data.refined_answer || "Xin lỗi, tôi không hiểu câu hỏi của bạn.";
-                chatBox.appendChild(botMsg);
+                // Cập nhật nội dung phản hồi chatbot với HTML đúng format
+                botMsg.innerHTML = data.refined_answer ? data.refined_answer : "<i>Xin lỗi, tôi không hiểu câu hỏi của bạn.</i>";
                 chatBox.scrollTop = chatBox.scrollHeight;
             } catch (error) {
                 console.error("Lỗi gọi API:", error);
+                botMsg.innerHTML = "<i>Không thể kết nối đến chatbot.</i>";
             }
         }
+
     </script>
 </body>
 </html>

@@ -9,6 +9,8 @@ import numpy as np
 import unicodedata
 import os
 import google.generativeai as genai
+from datetime import datetime
+
 
 app = Flask(__name__)
 CORS(app)
@@ -26,6 +28,7 @@ es = Elasticsearch("http://localhost:9200/")
 INDEX_NAME = "hdsd"  
 
 def text_to_vector(text):
+    text = normalize_text(text)
     inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True).to(device)
     with torch.no_grad():
         outputs = model(**inputs)
@@ -52,8 +55,8 @@ def normalize_text(text):
     return unicodedata.normalize("NFC", text).lower()
 
 
-def extract_docx_content(file_path):
-    doc = Document(file_path)
+def extract_docx_content(file):
+    doc = Document(file)
     extracted_data = []
     current_title = None
     current_answer = None
@@ -88,13 +91,27 @@ def extract_docx_content(file_path):
 
 # Hàm lưu dữ liệu vào Elasticsearch
 def save_to_elasticsearch(index_name, data):
-    # with open(output_file, "w", encoding="utf-8") as f:
-        for item in data:
-            title = item["title"]
-            # f.write(title + "\n")  # Ghi tiêu đề vào file
-            
-            title_vector = text_to_vector(title)
-            answer_vector = text_to_vector(item["answer"])
+    for item in data:
+        title = item["title"]
+        title_vector = text_to_vector(title)
+        answer_vector = text_to_vector(item["answer"])
+        
+        # Kiểm tra xem title đã tồn tại chưa
+        query = {"query": {"term": {"title.keyword": title}}}
+        response = es.search(index=index_name, body=query)
+        
+        if response["hits"]["hits"]:
+            # Nếu tồn tại, cập nhật nội dung
+            doc_id = response["hits"]["hits"][0]["_id"]
+            update_doc = {
+                "doc": {
+                    "answer": item["answer"],
+                    "answer_vector": answer_vector
+                }
+            }
+            es.update(index=index_name, id=doc_id, body=update_doc)
+        else:
+            # Nếu chưa có, tạo mới
             doc = {
                 "title": title,
                 "title_vector": title_vector,
@@ -102,6 +119,7 @@ def save_to_elasticsearch(index_name, data):
                 "answer_vector": answer_vector,
             }
             es.index(index=index_name, body=doc)
+    return "OK, data saved/updated in Elasticsearch"
     
     # print("OK, titles saved to", output_file)
 
@@ -143,8 +161,10 @@ def upload_file():
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
-    file_path = os.path.join("/tmp", file.filename)
-    file.save(file_path)
+    
+    # Xử lý file trực tiếp không cần lưu
+    data = extract_docx_content(file)
+    save_to_elasticsearch("hdsd", data)
     
     # Lưu thông tin file vào Elasticsearch
     file_doc = {
@@ -153,10 +173,9 @@ def upload_file():
     }
     es.index(index="file", body=file_doc)
     
-    data = extract_docx_content(file_path)
-    save_to_elasticsearch(INDEX_NAME, data)
-    os.remove(file_path)
     return jsonify({"message": "File processed successfully", "file_info": file_doc})
+
+
 @app.route("/files", methods=["GET"])
 def get_files():
     query = {
@@ -167,7 +186,7 @@ def get_files():
     files = [{"file_name": hit["_source"]["file_name"], "uploaded_at": hit["_source"]["uploaded_at"]} for hit in response["hits"]["hits"]]
     return jsonify(files)
 
-def search_in_elasticsearch(query, index_name, top_k=1):
+def search_in_elasticsearch(query, index_name, top_k=5):
     query_vector = text_to_vector(query)
     search_query = {
         "size": top_k,
@@ -211,14 +230,46 @@ def search():
     
     if not results:
         return jsonify({"message": "Không tìm thấy kết quả phù hợp."})
+    # kiểm tra câu trả lời
+    answers = []
+    for idx, result in enumerate(results):
+        answers.append(f"{idx}️⃣ Đáp án {idx}: \"{result['answer']}\"")
+
+    # Ghép tất cả các câu trả lời thành 1 chuỗi
+    answers_text = "\n".join(answers)
+
+    # Gửi yêu cầu đến Gemini AI
+    prompt = f"""
+    Tôi có một câu hỏi: "{query}".
+    Dưới đây là các câu trả lời từ hệ thống:
+    {answers_text}
+
+    Hãy phân tích và chọn câu trả lời nào đúng nhất cho câu hỏi trên. 
+    Nếu tất cả đều không phù hợp, hãy trả về "False".
+    Nếu một câu phù hợp, hãy trả về số thứ tự (0, 1, 2, ...) của câu trả lời đó.
+    Chỉ trả về số thứ tự hoặc "False", không có bất kỳ từ ngữ nào khác.
+    """
+
+    response = modelGMN.generate_content(prompt)
+    gemini_result = response.text.strip()
+
+    print("\n🔹 Kết quả từ Gemini AI:", gemini_result)
+
+    if gemini_result == "False":
+        return jsonify({
+            "query": query,
+            "original_answer": "Xin lỗi, tôi không hiểu câu hỏi của bạn. Hãy chi tiết câu hỏi hơn.",
+            "refined_answer": "Xin lỗi, tôi không hiểu câu hỏi của bạn. Hãy chi tiết câu hỏi hơn."
+        })
+
     
-    best_result = results[0]  # Lấy kết quả tốt nhất
+    best_result = results[int(gemini_result)]  # Lấy kết quả tốt nhất
     improved_answer = refine_answer(query, best_result['answer'])
-    
+    print(improved_answer)
     return jsonify({
         "query": query,
         "original_answer": best_result['answer'],
-        "refined_answer": improved_answer
+        "refined_answer": improved_answer.replace("\n", "<br>")
     })
 
 if __name__ == "__main__":

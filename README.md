@@ -35,7 +35,6 @@ docker run --name elasticsearch -d \
 ```sh
 docker start elasticsearch
 ```
-
 ---
 
 ## Chạy API
@@ -60,7 +59,7 @@ pip install flask flask-cors python-docx torch transformers elasticsearch numpy 
 > python -m pip install <tên thư viện>
 > ```
 
-### Chạy API
+### Chạy API (Nếu dùng python trên máy)
 1. Mở terminal hoặc CMD và di chuyển đến thư mục chứa `app.py`:
    ```sh
    cd chatbot_support/PythonApplication1/
@@ -69,19 +68,34 @@ pip install flask flask-cors python-docx torch transformers elasticsearch numpy 
    ```sh
    py app.py
    ```
-
----
-
-## Chạy giao diện người dùng
-Mở file giao diện `index.html` trong thư mục:
+### Chạy API (Nếu dùng Docker)
+Trước khi build extension, cần chạy API. Dockerfile nằm tại:
 ```sh
-chatbot_support/PythonApplication1/index.html
+chatbot_support/PythonApplication1/Dockerfile
 ```
-Dùng trình duyệt để kiểm tra giao diện chatbot.
+Chạy lệnh
+```sh
+docker build -t chatbot .
+```
+```sh
+docker run -d -p 5000:5000 --name chatbotcontainer chatbot
+```
+---
 
 ---
 
 ## Cấu hình API Key
+Nếu bạn chưa có API key. Hãy truy cập
+```sh
+https://aistudio.google.com/apikey
+```
+Chọn Get API key -> Create API key
+Nếu được yêu cầu chọn "project" mà bạn chưa có project nào hãy truy cập
+```sh
+https://console.cloud.google.com/
+```
+Chọn Gemini API -> New project -> nhập các thông tin cần thiết để tạo một project sau đó thực hiện lại bước bên trên
+
 Trong file mã nguồn, bạn có thể thay đổi API key cho Gemini AI bằng cách chỉnh sửa dòng sau trong mã:
 ```python
 genai.configure(api_key="YOUR_API_KEY_HERE")
@@ -91,19 +105,12 @@ genai.configure(api_key="YOUR_API_KEY_HERE")
 ---
 
 ## Build Extension Chrome
-
-### Chạy API
-Trước khi build extension, cần chạy API. Dockerfile nằm tại:
-```sh
-chatbot_support/PythonApplication1/Dockerfile
-```
-
 ### Đổi API URL
 Dự án có 2 folder:
 - `extension_chatbot`
 - `extension_upload`
 
-Truy cập vào `index.js` và chỉnh sửa dòng sau:
+Truy cập vào `index.js` trong 2 folder và chỉnh sửa dòng sau:
 ```js
 const api = "http://127.0.0.1:5000/"; 
 // Đổi thành API URL của bạn:

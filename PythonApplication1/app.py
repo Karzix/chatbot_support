@@ -24,13 +24,13 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name).to(device)
 
 # Cấu hình API key cho Google Generative AI
-genai.configure(api_key="AIzaSyC7aoODhVimXdVvsKgKlS6Oe3qZwMEV41k")
+genai.configure(api_key="AIzaSyAPPaWgr8xp_ue4p_GMnbrD2Ow-m58Xkxo")
 
 # Khởi tạo mô hình Gemini
 modelGMN = genai.GenerativeModel("gemini-2.0-flash")
 
 # Kết nối đến Elasticsearch
-es = Elasticsearch("http://localhost:9200/")
+es = Elasticsearch("http://103.209.34.217:9200/")
 
 # Tên chỉ mục trong Elasticsearch
 INDEX_NAME = "hdsd"

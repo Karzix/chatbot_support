@@ -1,4 +1,4 @@
-# Chatbot Hỗ Trợ Hướng Dẫn Sử Dụng Phần Mềm Quản Lý Bệnh Viện
+# Chatbot Hỗ Trợ Hướng Dẫn Sử Dụng Phần Mềm
 
 ## Giới thiệu
 Dự án này triển khai một chatbot sử dụng Python, Flask và Elasticsearch để hỗ trợ nhân viên sử dụng phần mềm y tế. Chatbot có thể đọc nội dung từ file DOCX, trả lời câu hỏi dựa trên nội dung đó và cập nhật dữ liệu khi bổ sung file mới.

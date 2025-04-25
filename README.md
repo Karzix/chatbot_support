@@ -129,4 +129,24 @@ const api = "{your api url}";
 
 ---
 
-
+### Deploy VPS
+1. Đến thư mục chứa Dockerfile, mở CMD và chạy lệnh để build image 
+```sh
+docker build -t chatbot .
+```
+2. Đặt tag
+```sh
+docker tag chatbot <tên_dockerhub>/chatbot:latest
+```
+3. Push image lên dockerhub
+```sh
+docker push <tên_dockerhub>/chatbot:latest
+```
+4. Truy cập vào VPS và chạy lệnh để pull image
+```sh
+docker pull <tên_dockerhub>/chatbot:latest
+```
+5. Run
+```sh
+docker run -d -p 5000:5000 --name chatbotcontainer <tên_dockerhub>/chatbot:latest
+```
